@@ -3,3 +3,4 @@ pandas
 plotly
 st-supabase-connection
 st-login-form
+extra-streamlit-components
