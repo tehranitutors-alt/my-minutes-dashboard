@@ -4,37 +4,47 @@ from st_login_form import login_form
 import extra_streamlit_components as stx
 import pandas as pd
 import plotly.express as px
+import time
 
 st.set_page_config(page_title="Minutes Dashboard 2026", layout="wide")
 
-# --- 1. SESSION & COOKIE MANAGEMENT ---
-# This keeps you logged in even after refreshing
-cookie_manager = stx.CookieManager()
+# --- 1. COOKIE & SESSION INITIALIZATION ---
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
 
-def handle_auth():
-    # Try to get username from cookie
-    saved_user = cookie_manager.get(cookie="minutes_user_session")
-    
-    if saved_user and not st.session_state.get("authenticated"):
-        st.session_state["authenticated"] = True
-        st.session_state["username"] = saved_user
-
-    if not st.session_state.get("authenticated"):
-        client = login_form(title="Member Access", allow_guest=False)
-        if st.session_state.get("authenticated"):
-            # Save cookie for 30 days
-            cookie_manager.set("minutes_user_session", st.session_state["username"], key="set_user_cookie")
-            st.rerun()
-        st.stop()
-    return True
+# This component needs a unique key to stay stable
+cookie_manager = stx.CookieManager(key="myminutes_auth_manager")
 
 # --- 2. DATABASE CONNECTION ---
 conn = st.connection("supabase", type=SupabaseConnection)
 
-# Run Auth
-handle_auth()
+# --- 3. PERSISTENT LOGIN LOGIC ---
+def check_auth():
+    # Wait a split second for cookies to load from browser
+    time.sleep(0.5) 
+    saved_user = cookie_manager.get(cookie="minutes_user_session")
+    
+    if saved_user and not st.session_state["authenticated"]:
+        st.session_state["authenticated"] = True
+        st.session_state["username"] = saved_user
+        return True
+    
+    if not st.session_state["authenticated"]:
+        # Only show the form if we aren't already authed via cookie
+        client = login_form(title="Member Access", allow_guest=False)
+        if st.session_state["authenticated"]:
+            cookie_manager.set("minutes_user_session", st.session_state["username"], key="save_user_on_login")
+            st.rerun()
+        return False
+    return True
 
-# --- 3. SIDEBAR: ENTRY FORM ---
+# Run the auth check
+is_logged_in = check_auth()
+
+if not is_logged_in:
+    st.stop()
+
+# --- 4. DASHBOARD CODE (Only runs if logged in) ---
 st.sidebar.header(f"👋 Welcome, {st.session_state['username']}!")
 
 with st.sidebar.form("entry_form", clear_on_submit=True):
@@ -44,7 +54,6 @@ with st.sidebar.form("entry_form", clear_on_submit=True):
 
     if submit:
         try:
-            # We use 'period_name' to match our SQL fix
             conn.table("member_activity").insert({
                 "display_name": st.session_state["username"],
                 "period_name": period,
@@ -60,42 +69,28 @@ if st.sidebar.button("Logout"):
     st.session_state["authenticated"] = False
     st.rerun()
 
-# --- 4. MAIN DASHBOARD: VISUALS ---
-st.title("📊 Minutes Leaderboard & Payoff")
+st.title("📊 Minutes Leaderboard")
 
+# Load Data inside a try/except to prevent the yellow warning box
 try:
-    # Fetch data
     res = conn.table("member_activity").select("*").execute()
     df = pd.DataFrame(res.data)
 
     if not df.empty:
-        # --- EXCEL MATH LOGIC ---
+        # Excel Math Logic
         total_pool = 650
-        df['sq_minutes'] = df['minutes'] ** 2
+        df['sq_minutes'] = df['minutes'].astype(float) ** 2
         group_total_sq = df['sq_minutes'].sum()
-        
-        if group_total_sq > 0:
-            df['payoff'] = (df['sq_minutes'] / group_total_sq) * total_pool
-        else:
-            df['payoff'] = 0
+        df['payoff'] = (df['sq_minutes'] / group_total_sq) * total_pool if group_total_sq > 0 else 0
 
-        # Visuals
-        col1, col2 = st.columns(2)
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(px.bar(df, x="display_name", y="minutes", color="period_name"), use_container_width=True)
+        with c2:
+            st.plotly_chart(px.pie(df, values="payoff", names="display_name", hole=0.3), use_container_width=True)
         
-        with col1:
-            st.subheader("Total Minutes by Member")
-            fig_min = px.bar(df, x="display_name", y="minutes", color="period_name", barmark="group")
-            st.plotly_chart(fig_min, use_container_width=True)
-
-        with col2:
-            st.subheader("Estimated Payoff Share")
-            fig_pay = px.pie(df, values="payoff", names="display_name", hole=0.3)
-            st.plotly_chart(fig_pay, use_container_width=True)
-            
-        st.subheader("Raw Data")
-        st.dataframe(df[['display_name', 'period_name', 'minutes', 'payoff']].sort_values('minutes', ascending=False), use_container_width=True)
+        st.dataframe(df[['display_name', 'period_name', 'minutes', 'payoff']], use_container_width=True)
     else:
-        st.info("No data yet. Use the sidebar to submit your first entry!")
-
+        st.info("No entries found yet!")
 except Exception as e:
-    st.warning("Connect to database to see chart...")
+    st.error(f"Database error: {e}")
