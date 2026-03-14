@@ -19,30 +19,33 @@ cookie_manager = stx.CookieManager(key="myminutes_auth_manager")
 conn = st.connection("supabase", type=SupabaseConnection)
 
 # --- 3. PERSISTENT LOGIN LOGIC ---
-def check_auth():
-    # Wait a split second for cookies to load from browser
-    time.sleep(0.5) 
-    saved_user = cookie_manager.get(cookie="minutes_user_session")
+def handle_auth():
+    # 1. Initialize the manager
+    cookie_manager = stx.CookieManager(key="myminutes_v2")
     
-    if saved_user and not st.session_state["authenticated"]:
+    # Give the browser a moment to wake up
+    time.sleep(0.6) 
+    
+    # 2. Check for cookie
+    cookie_val = cookie_manager.get(cookie="minutes_user_session")
+    
+    # 3. Logic Gate
+    if cookie_val:
         st.session_state["authenticated"] = True
-        st.session_state["username"] = saved_user
+        st.session_state["username"] = cookie_val
         return True
     
-    if not st.session_state["authenticated"]:
-        # Only show the form if we aren't already authed via cookie
-        client = login_form(title="Member Access", allow_guest=False)
-        if st.session_state["authenticated"]:
-            cookie_manager.set("minutes_user_session", st.session_state["username"], key="save_user_on_login")
+    if not st.session_state.get("authenticated"):
+        # Show login form
+        login_form(title="Member Access", allow_guest=False)
+        
+        if st.session_state.get("authenticated"):
+            # If they just logged in, set the cookie and REFRESH to lock it in
+            cookie_manager.set("minutes_user_session", st.session_state["username"], key="set_cookie_now")
+            time.sleep(0.5)
             st.rerun()
         return False
     return True
-
-# Run the auth check
-is_logged_in = check_auth()
-
-if not is_logged_in:
-    st.stop()
 
 # --- 4. DASHBOARD CODE (Only runs if logged in) ---
 st.sidebar.header(f"👋 Welcome, {st.session_state['username']}!")
