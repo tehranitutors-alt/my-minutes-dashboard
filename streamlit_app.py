@@ -12,22 +12,37 @@ cookie_manager = stx.CookieManager(key="myminutes_v6")
 conn = st.connection("supabase", type=SupabaseConnection)
 
 def run_auth():
-    time.sleep(0.5)
-    saved_user = cookie_manager.get(cookie="minutes_user_session")
-    if saved_user and not st.session_state.get("authenticated"):
-        st.session_state["authenticated"] = True
-        st.session_state["username"] = saved_user
+    # 1. Check session state first (fastest)
+    if st.session_state.get("authenticated"):
         return True
+
+    # 2. Try to catch the cookie with a "Double Look"
+    # We loop twice to give the browser time to hand over the data
+    for _ in range(2):
+        cookie_val = cookie_manager.get(cookie="minutes_user_session")
+        if cookie_val:
+            st.session_state["authenticated"] = True
+            st.session_state["username"] = cookie_val
+            return True
+        time.sleep(0.5) # Wait half a second before the second look
+
+    # 3. If still nothing, show the login form
     if not st.session_state.get("authenticated"):
-        login_form(title="Member Access", allow_guest=False)
+        # We use a unique key for the form to prevent double-renders
+        with st.container():
+            login_form(title="Member Access", allow_guest=False, key="main_login_form")
+        
         if st.session_state.get("authenticated"):
-            cookie_manager.set("minutes_user_session", st.session_state["username"], key="set_cookie")
+            # Set the cookie with a long expiry and a clean key
+            cookie_manager.set(
+                "minutes_user_session", 
+                st.session_state["username"], 
+                key="cookie_setter_final",
+                expires_at=time.time() + (30 * 24 * 60 * 60)
+            )
             st.rerun()
         return False
     return True
-
-if not run_auth():
-    st.stop()
 
 # --- SIDEBAR: ENTRY & DELETE ---
 st.sidebar.header(f"👋 Welcome, {st.session_state['username']}!")
