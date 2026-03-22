@@ -80,7 +80,7 @@ else:
         st.rerun()
 
 # --- 4. MAIN DASHBOARD (Visible to Everyone) ---
-st.title("📊 Minutes Dashboard")
+st.title("June Hurty Intensity Minutes Dashboard 💪📊 ")
 
 try:
     res = conn.table("member_activity").select("*").execute()
