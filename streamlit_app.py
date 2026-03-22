@@ -9,15 +9,14 @@ import time
 st.set_page_config(page_title="Minutes Dashboard 2026", layout="wide")
 
 # --- 1. INITIALIZE COMPONENTS ---
-cookie_manager = stx.CookieManager(key="myminutes_v11_master")
+cookie_manager = stx.CookieManager(key="myminutes_v12_final")
 conn = st.connection("supabase", type=SupabaseConnection)
 
-# --- 2. THE PERSISTENT AUTH FUNCTION ---
+# --- 2. PERSISTENT AUTH LOGIC ---
 def run_auth():
     if st.session_state.get("authenticated"):
         return True
 
-    # Give browser time to load cookies
     time.sleep(0.7)
     cookie_val = cookie_manager.get(cookie="minutes_user_session")
     
@@ -32,17 +31,16 @@ def run_auth():
         cookie_manager.set(
             "minutes_user_session", 
             st.session_state["username"], 
-            key="save_cookie_final",
+            key="save_cookie_v12",
             expires_at=time.time() + (30 * 24 * 60 * 60)
         )
         st.rerun()
     return False
 
-# Stop app here if not logged in
 if not run_auth():
     st.stop()
 
-# --- 3. SIDEBAR: WELCOME & ENTRY FORM ---
+# --- 3. SIDEBAR: ENTRY FORM ---
 user_name = st.session_state.get("username", "Member")
 st.sidebar.header(f"👋 Welcome, {user_name}!")
 
@@ -60,9 +58,9 @@ with st.sidebar.form("entry_form", clear_on_submit=True):
             time.sleep(1)
             st.rerun()
         except Exception:
-            st.error(f"⚠️ Limit Reached: You already have an entry for {period}. Delete it below to change it.")
+            st.error(f"⚠️ Limit Reached: You already have an entry for {period}.")
 
-# --- 4. SIDEBAR: DELETE ENTRY FUNCTION ---
+# --- 4. SIDEBAR: DELETE FUNCTION ---
 st.sidebar.markdown("---")
 st.sidebar.subheader("🗑️ Manage My Entries")
 try:
@@ -75,8 +73,6 @@ try:
             st.sidebar.warning(f"Deleted {target}")
             time.sleep(1)
             st.rerun()
-    else:
-        st.sidebar.info("No entries to manage yet.")
 except:
     pass
 
@@ -85,7 +81,7 @@ if st.sidebar.button("Logout"):
     st.session_state.clear()
     st.rerun()
 
-# --- 5. MAIN DASHBOARD & LEADERBOARD ---
+# --- 5. MAIN DASHBOARD ---
 st.title("📊 Minutes Dashboard")
 
 try:
@@ -96,28 +92,31 @@ try:
         total_pool = 600
         df['minutes'] = df['minutes'].astype(float)
         
-        # Calculations: Group by name for the Season Totals
+        # Calculation Logic
         totals = df.groupby('display_name')['minutes'].sum().reset_index()
         totals['sq_minutes'] = totals['minutes'] ** 2
         total_sq = totals['sq_minutes'].sum()
         totals['payoff'] = (totals['sq_minutes'] / total_sq) * total_pool if total_sq > 0 else 0
         
-        # Visuals
+        # Charts
         c1, c2 = st.columns(2)
         with c1:
-            st.plotly_chart(px.bar(df, x="display_name", y="minutes", color="period_name", title="Minutes per Period"), use_container_width=True)
+            st.plotly_chart(px.bar(df, x="display_name", y="minutes", color="period_name", title="Minutes Breakdown"), use_container_width=True)
         with c2:
             st.plotly_chart(px.pie(totals, values="payoff", names="display_name", title=f"Payoff Share of ${total_pool}"), use_container_width=True)
         
-        # THE LEADERBOARD
-        st.markdown("---")
-        st.header("🏆 Season Rankings (All Periods)")
+        # LEADERBOARD
+        st.header("🏆 Season Rankings")
         rank_df = totals[['display_name', 'minutes', 'payoff']].sort_values('minutes', ascending=False).reset_index(drop=True)
-        rank_df.index += 1  # Rank starts at 1
+        rank_df.index += 1
         st.table(rank_df.style.format({"payoff": "${:.2f}", "minutes": "{:.0f}"}))
 
-    else:
-        st.info("The leaderboard is empty. Enter your first Period minutes in the sidebar!")
+        # SPECIFIC ENTRIES (Restored)
+        st.markdown("---")
+        st.subheader("📝 All Specific Entries")
+        st.dataframe(df[['display_name', 'period_name', 'minutes']].sort_values(['period_name', 'display_name']), use_container_width=True)
 
+    else:
+        st.info("No entries yet. Log your minutes in the sidebar!")
 except Exception as e:
-    st.error(f"Dashboard error: {e}")
+    st.error(f"Error: {e}")
