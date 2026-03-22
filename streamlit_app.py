@@ -81,6 +81,23 @@ else:
 
 # --- 4. MAIN DASHBOARD (Visible to Everyone) ---
 st.title("June Hurty Intensity Minutes Dashboard 💪📊 ")
+st.markdown("#### $100 entry per person = $600 Total Pot • Periods 1-5 • June 2026")
+
+with st.expander("ℹ️ View Dashboard Instructions & June Schedule"):
+    st.write("""
+    **How to Log:** Members log in via the sidebar to submit Garmin Intensity Minutes.
+    
+    **June Schedule:**
+    - **Period 1:** June 1–7 
+    - **Period 2:** June 8–14 
+    - **Period 3:** June 15–21 
+    - **Period 4:** June 22–28 
+    - **Period 5:** June 29–30
+    
+    **What are Intensity Minutes?**
+    Garmin tracks your heart rate. Moderate activity earns 1 min, but **Vigorous** activity earns **2 mins**. 
+    The payoff math uses these totals squared ($min^2$), rewarding consistent high-intensity effort!
+    """)
 
 try:
     res = conn.table("member_activity").select("*").execute()
