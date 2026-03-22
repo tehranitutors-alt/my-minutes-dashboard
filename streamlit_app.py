@@ -9,17 +9,15 @@ import time
 st.set_page_config(page_title="Minutes Dashboard 2026", layout="wide")
 
 # --- 1. INITIALIZE COMPONENTS ---
-# Unique key 'v10' to force a fresh connection for your work computer
-cookie_manager = stx.CookieManager(key="myminutes_v10")
+cookie_manager = stx.CookieManager(key="myminutes_v11_master")
 conn = st.connection("supabase", type=SupabaseConnection)
 
 # --- 2. THE PERSISTENT AUTH FUNCTION ---
 def run_auth():
-    # If session is already active in this tab, we're good
     if st.session_state.get("authenticated"):
         return True
 
-    # Give the browser a moment to find the cookie
+    # Give browser time to load cookies
     time.sleep(0.7)
     cookie_val = cookie_manager.get(cookie="minutes_user_session")
     
@@ -28,11 +26,9 @@ def run_auth():
         st.session_state["username"] = cookie_val
         return True
 
-    # Otherwise, show login form
     login_form(title="Member Access", allow_guest=False)
     
     if st.session_state.get("authenticated"):
-        # Save cookie for 30 days
         cookie_manager.set(
             "minutes_user_session", 
             st.session_state["username"], 
@@ -42,12 +38,11 @@ def run_auth():
         st.rerun()
     return False
 
-# CRITICAL: This stops the KeyError. 
-# The app won't run line 51+ until you are logged in.
+# Stop app here if not logged in
 if not run_auth():
     st.stop()
 
-# --- 3. SIDEBAR (Only runs if logged in) ---
+# --- 3. SIDEBAR: WELCOME & ENTRY FORM ---
 user_name = st.session_state.get("username", "Member")
 st.sidebar.header(f"👋 Welcome, {user_name}!")
 
@@ -65,16 +60,32 @@ with st.sidebar.form("entry_form", clear_on_submit=True):
             time.sleep(1)
             st.rerun()
         except Exception:
-            st.error(f"⚠️ Limit Reached: You already have an entry for {period}.")
+            st.error(f"⚠️ Limit Reached: You already have an entry for {period}. Delete it below to change it.")
 
-# Delete and Logout
+# --- 4. SIDEBAR: DELETE ENTRY FUNCTION ---
 st.sidebar.markdown("---")
+st.sidebar.subheader("🗑️ Manage My Entries")
+try:
+    user_data = conn.table("member_activity").select("*").eq("display_name", user_name).execute()
+    if user_data.data:
+        periods_to_delete = sorted([row['period_name'] for row in user_data.data])
+        target = st.sidebar.selectbox("Delete which one?", periods_to_delete)
+        if st.sidebar.button(f"Confirm Delete {target}"):
+            conn.table("member_activity").delete().eq("display_name", user_name).eq("period_name", target).execute()
+            st.sidebar.warning(f"Deleted {target}")
+            time.sleep(1)
+            st.rerun()
+    else:
+        st.sidebar.info("No entries to manage yet.")
+except:
+    pass
+
 if st.sidebar.button("Logout"):
     cookie_manager.delete("minutes_user_session")
     st.session_state.clear()
     st.rerun()
 
-# --- 4. MAIN DASHBOARD ---
+# --- 5. MAIN DASHBOARD & LEADERBOARD ---
 st.title("📊 Minutes Dashboard")
 
 try:
@@ -85,23 +96,28 @@ try:
         total_pool = 600
         df['minutes'] = df['minutes'].astype(float)
         
-        # Rankings Math (Across all periods)
+        # Calculations: Group by name for the Season Totals
         totals = df.groupby('display_name')['minutes'].sum().reset_index()
         totals['sq_minutes'] = totals['minutes'] ** 2
         total_sq = totals['sq_minutes'].sum()
         totals['payoff'] = (totals['sq_minutes'] / total_sq) * total_pool if total_sq > 0 else 0
         
+        # Visuals
         c1, c2 = st.columns(2)
         with c1:
-            st.plotly_chart(px.bar(df, x="display_name", y="minutes", color="period_name", title="History"), use_container_width=True)
+            st.plotly_chart(px.bar(df, x="display_name", y="minutes", color="period_name", title="Minutes per Period"), use_container_width=True)
         with c2:
             st.plotly_chart(px.pie(totals, values="payoff", names="display_name", title=f"Payoff Share of ${total_pool}"), use_container_width=True)
         
-        st.subheader("🏆 Season Rankings")
-        rank_df = totals[['display_name', 'minutes', 'payoff']].sort_values('minutes', ascending=False)
+        # THE LEADERBOARD
+        st.markdown("---")
+        st.header("🏆 Season Rankings (All Periods)")
+        rank_df = totals[['display_name', 'minutes', 'payoff']].sort_values('minutes', ascending=False).reset_index(drop=True)
+        rank_df.index += 1  # Rank starts at 1
         st.table(rank_df.style.format({"payoff": "${:.2f}", "minutes": "{:.0f}"}))
+
     else:
-        st.info("The leaderboard is currently empty.")
+        st.info("The leaderboard is empty. Enter your first Period minutes in the sidebar!")
+
 except Exception as e:
     st.error(f"Dashboard error: {e}")
-    
