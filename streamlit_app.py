@@ -33,7 +33,7 @@ if not run_auth():
 st.sidebar.header(f"👋 Welcome, {st.session_state['username']}!")
 
 with st.sidebar.form("entry_form", clear_on_submit=True):
-    period = st.selectbox("Select Period", [f"Week {i}" for i in range(1, 13)])
+    period = st.selectbox("Select Period", [f"Period {i}" for i in range(1, 6)])
     minutes = st.number_input("Minutes Worked", min_value=0, step=1)
     submit = st.form_submit_button("Submit Minutes")
 
