@@ -81,7 +81,7 @@ else:
 
 # --- 4. MAIN DASHBOARD (Visible to Everyone) ---
 st.title("June Hurty Intensity Minutes Dashboard 💪📊 ")
-st.markdown("#### 100 AUD/ entry per person = $600 Total Pot • Periods 1-5 • June 2026")
+st.markdown("#### 100 AUD entry per person = $600 Total Pot • Periods 1-5 • June 2026")
 
 with st.expander("ℹ️ View Dashboard Instructions & June Schedule"):
     st.write("""
