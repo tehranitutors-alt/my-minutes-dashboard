@@ -80,24 +80,10 @@ else:
         st.rerun()
 
 # --- 4. MAIN DASHBOARD (Visible to Everyone) ---
-st.title("June Hurty Intensity Minutes Dashboard 💪📊 ")
-st.markdown("#### 100 AUD entry per person = $600 Total Pot • Periods 1-5 • June 2026")
+st.title("📊 Minutes Dashboard")
+st.markdown("#### $600 Total Pot • June 2026 Competition")
 
-with st.expander("ℹ️ View Dashboard Instructions & June Schedule"):
-    st.write("""
-    **How to Log:** Members log in via the sidebar to submit Garmin Intensity Minutes.
-    
-    **June Schedule:**
-    - **Period 1:** June 1–7 
-    - **Period 2:** June 8–14 
-    - **Period 3:** June 15–21 
-    - **Period 4:** June 22–28 
-    - **Period 5:** June 29–30
-    
-    **What are Intensity Minutes?**
-    Garmin tracks your heart rate. Moderate activity earns 1 min, but **Vigorous** activity earns **2 mins**. 
-    The payoff math uses these totals squared ($min^2$), rewarding consistent high-intensity effort!
-    """)
+# [The Expanders and instructions stay here...]
 
 try:
     res = conn.table("member_activity").select("*").execute()
@@ -107,31 +93,46 @@ try:
         total_pool = 600
         df['minutes'] = df['minutes'].astype(float)
         
-        # Math
+        # 1. Calculate Totals and Payoffs
         totals = df.groupby('display_name')['minutes'].sum().reset_index()
         totals['sq_minutes'] = totals['minutes'] ** 2
         total_sq = totals['sq_minutes'].sum()
         totals['payoff'] = (totals['sq_minutes'] / total_sq) * total_pool if total_sq > 0 else 0
         
+        # 2. NEW: Create the "Period Tracker" (The 5 Circles)
+        # This creates a map of who has entered what
+        entry_map = df.pivot_table(index='display_name', columns='period_name', values='minutes', aggfunc='count').fillna(0)
+        
+        def get_streak_icons(user):
+            icons = []
+            for i in range(1, 6):
+                p_name = f"Period {i}"
+                if p_name in entry_map.columns and entry_map.loc[user, p_name] > 0:
+                    icons.append("✅") # Entry exists
+                else:
+                    icons.append("⚪") # Missing entry
+            return " ".join(icons)
+
+        totals['Status'] = totals['display_name'].apply(get_streak_icons)
+
         # Charts
         c1, c2 = st.columns(2)
         with c1:
-            st.plotly_chart(px.bar(df, x="display_name", y="minutes", color="period_name", title="Entry Breakdown"), use_container_width=True)
+            st.plotly_chart(px.bar(df, x="display_name", y="minutes", color="period_name", title="Minutes by Period"), use_container_width=True)
         with c2:
-            st.plotly_chart(px.pie(totals, values="payoff", names="display_name", title=f"Payoff Share (${total_pool})"), use_container_width=True)
+            st.plotly_chart(px.pie(totals, values="payoff", names="display_name", title="Estimated Payoff Share"), use_container_width=True)
         
-        # Rankings
+        # 3. UPDATED LEADERBOARD: Now with Status Icons
         st.header("🏆 Season Rankings")
-        rank_df = totals[['display_name', 'minutes', 'payoff']].sort_values('minutes', ascending=False).reset_index(drop=True)
+        # Reordering columns to put Status next to the name
+        rank_df = totals[['display_name', 'Status', 'minutes', 'payoff']].sort_values('minutes', ascending=False).reset_index(drop=True)
         rank_df.index += 1
-        st.table(rank_df.style.format({"payoff": "${:.2f}", "minutes": "{:.0f}"}))
+        
+        # Rename columns for a cleaner look
+        rank_df.columns = ["Member", "Activity Tracker (P1-P5)", "Total Minutes", "Est. Payoff"]
+        
+        st.table(rank_df.style.format({"Est. Payoff": "${:.2f}", "Total Minutes": "{:.0f}"}))
 
-        # Entries
-        with st.expander("View All Specific Entries"):
+        with st.expander("View Specific Entry History"):
             st.dataframe(df[['display_name', 'period_name', 'minutes']].sort_values(['period_name', 'display_name']), use_container_width=True)
-    else:
-        st.info("The dashboard is currently empty. Members can log in via the sidebar to contribute.")
-
-except Exception as e:
-    st.error(f"Error: {e}")
     
