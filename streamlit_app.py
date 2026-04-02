@@ -12,13 +12,10 @@ st.set_page_config(page_title="Minutes Dashboard 2026", layout="wide")
 cookie_manager = stx.CookieManager(key="myminutes_guest_v1")
 conn = st.connection("supabase", type=SupabaseConnection)
 
-# --- 2. AUTH CHECK (Runs silently) ---
+# --- 2. AUTH CHECK ---
 def check_auth_status():
-    # If already in session, stay in
     if st.session_state.get("authenticated"):
         return True
-    
-    # Try cookie backup
     time.sleep(0.5)
     cookie_val = cookie_manager.get(cookie="minutes_user_session")
     if cookie_val:
@@ -43,11 +40,10 @@ else:
     user_name = st.session_state.get("username", "Member")
     st.sidebar.success(f"Logged in as: **{user_name}**")
     
-    # MEMBER ONLY: ENTRY FORM
     with st.sidebar.form("entry_form", clear_on_submit=True):
         st.subheader("Submit Minutes")
         period = st.selectbox("Select Period", [f"Period {i}" for i in range(1, 6)])
-        minutes = st.number_input("Minutes Worked", min_value=0, step=1)
+        minutes = st.number_input("Intensity Minutes", min_value=0, step=1)
         if st.form_submit_button("Submit Minutes"):
             try:
                 conn.table("member_activity").insert({
@@ -61,7 +57,6 @@ else:
             except Exception:
                 st.sidebar.error(f"⚠️ Limit Reached for {period}.")
 
-    # MEMBER ONLY: DELETE FUNCTION
     st.sidebar.markdown("---")
     try:
         user_data = conn.table("member_activity").select("*").eq("display_name", user_name).execute()
@@ -79,11 +74,34 @@ else:
         st.session_state.clear()
         st.rerun()
 
-# --- 4. MAIN DASHBOARD (Visible to Everyone) ---
-st.title("📊 Minutes Dashboard")
-st.markdown("#### $600 Total Pot • June 2026 Competition")
+# --- 4. MAIN DASHBOARD ---
+st.title("June Hurty Intensity Minutes Dashboard 💪📊")
+st.markdown("#### $100 AUD entry per person = $600 Total Pot • June 2026")
 
-# [The Expanders and instructions stay here...]
+with st.expander("ℹ️ Instructions, June Schedule & Garmin Setup"):
+    st.markdown("""
+    ### 1. The June Schedule
+    | Period | Dates | Focus |
+    | :--- | :--- | :--- |
+    | **Period 1** | June 1 – 7 | Kickoff |
+    | **Period 2** | June 8 – 14 | Momentum |
+    | **Period 3** | June 15 – 21 | Mid-point |
+    | **Period 4** | June 22 – 28 | Final Stretch |
+    | **Period 5** | June 29 – 30 | **The Sprint (Final 48 Hours)** |
+
+    ### 2. What are Intensity Minutes?
+    Garmin tracks your heart rate to measure effort. 
+    * **Moderate (1x):** Brisk walking. 1 min = 1 point.
+    * **Vigorous (2x):** Running/Heavy lifting. 1 min = **2 points**.
+    * **Math:** We use **Total Minutes Squared ($min^2$)** to calculate your share of the $600 pot.
+
+    ### 3. Fair Play: Standardizing Your Watch
+    To ensure the 2x multiplier is fair for everyone (regardless of resting heart rate), please update your Garmin settings:
+    1. Open **Garmin Connect** app > **Devices** > Your Watch.
+    2. **User Profile** > **Heart Rate & Physio Zones** > **Heart Rate** > **Zones**.
+    3. Change **'Based On'** to **% of HRR** (Heart Rate Reserve).
+    4. Ensure **Zone 3 starts at 50%** (Moderate) and **Zone 4 starts at 70%** (Vigorous).
+    """)
 
 try:
     res = conn.table("member_activity").select("*").execute()
@@ -93,46 +111,48 @@ try:
         total_pool = 600
         df['minutes'] = df['minutes'].astype(float)
         
-        # 1. Calculate Totals and Payoffs
+        # Math
         totals = df.groupby('display_name')['minutes'].sum().reset_index()
         totals['sq_minutes'] = totals['minutes'] ** 2
         total_sq = totals['sq_minutes'].sum()
         totals['payoff'] = (totals['sq_minutes'] / total_sq) * total_pool if total_sq > 0 else 0
         
-        # 2. NEW: Create the "Period Tracker" (The 5 Circles)
-        # This creates a map of who has entered what
-        entry_map = df.pivot_table(index='display_name', columns='period_name', values='minutes', aggfunc='count').fillna(0)
+        # --- NEW: ACTIVITY TRACKER LOGIC ---
+        # Pivot the data to see who has entries for which period
+        pivot = df.pivot_table(index='display_name', columns='period_name', values='minutes', aggfunc='count').fillna(0)
         
-        def get_streak_icons(user):
+        def make_streak(name):
             icons = []
             for i in range(1, 6):
-                p_name = f"Period {i}"
-                if p_name in entry_map.columns and entry_map.loc[user, p_name] > 0:
-                    icons.append("✅") # Entry exists
+                p = f"Period {i}"
+                if p in pivot.columns and pivot.loc[name, p] > 0:
+                    icons.append("✅")
                 else:
-                    icons.append("⚪") # Missing entry
+                    icons.append("⚪")
             return " ".join(icons)
-
-        totals['Status'] = totals['display_name'].apply(get_streak_icons)
-
+        
+        totals['Activity Tracker'] = totals['display_name'].apply(make_streak)
+        
         # Charts
         c1, c2 = st.columns(2)
         with c1:
-            st.plotly_chart(px.bar(df, x="display_name", y="minutes", color="period_name", title="Minutes by Period"), use_container_width=True)
+            st.plotly_chart(px.bar(df, x="display_name", y="minutes", color="period_name", title="Entry Breakdown"), use_container_width=True)
         with c2:
-            st.plotly_chart(px.pie(totals, values="payoff", names="display_name", title="Estimated Payoff Share"), use_container_width=True)
+            st.plotly_chart(px.pie(totals, values="payoff", names="display_name", title=f"Payoff Share (${total_pool})"), use_container_width=True)
         
-        # 3. UPDATED LEADERBOARD: Now with Status Icons
+        # Rankings
         st.header("🏆 Season Rankings")
-        # Reordering columns to put Status next to the name
-        rank_df = totals[['display_name', 'Status', 'minutes', 'payoff']].sort_values('minutes', ascending=False).reset_index(drop=True)
+        rank_df = totals[['display_name', 'Activity Tracker', 'minutes', 'payoff']].sort_values('minutes', ascending=False).reset_index(drop=True)
         rank_df.index += 1
-        
-        # Rename columns for a cleaner look
-        rank_df.columns = ["Member", "Activity Tracker (P1-P5)", "Total Minutes", "Est. Payoff"]
+        rank_df.columns = ["Member", "Weekly Status (P1-P5)", "Total Minutes", "Est. Payoff"]
         
         st.table(rank_df.style.format({"Est. Payoff": "${:.2f}", "Total Minutes": "{:.0f}"}))
 
-        with st.expander("View Specific Entry History"):
+        # Entries
+        with st.expander("View All Specific Entries"):
             st.dataframe(df[['display_name', 'period_name', 'minutes']].sort_values(['period_name', 'display_name']), use_container_width=True)
-    
+    else:
+        st.info("The dashboard is currently empty. Members can log in via the sidebar to contribute.")
+
+except Exception as e:
+    st.error(f"Error: {e}")
