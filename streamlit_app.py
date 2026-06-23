@@ -69,7 +69,6 @@ st.markdown("#### $100 AUD entry per person = $500 Total Pot • Periods 1-5 •
 
 with st.expander("ℹ️ View Dashboard Instructions & June Schedule"):
     st.write("""
-    **How to Log:** Members log in via the sidebar to submit Garmin Intensity Minutes.
     
     **June Schedule:**
     - **Period 1:** June 1–7 
