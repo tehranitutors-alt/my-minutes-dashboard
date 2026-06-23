@@ -76,7 +76,7 @@ else:
 
 # --- 4. MAIN DASHBOARD ---
 st.title("June Hurty Intensity Minutes Dashboard 💪📊")
-st.markdown("#### $100 AUD entry per person = $600 Total Pot • June 2026")
+st.markdown("#### $100 AUD entry per person = $500 Total Pot • June 2026")
 
 with st.expander("ℹ️ Instructions, June Schedule & Garmin Setup"):
     st.markdown("""
@@ -93,7 +93,7 @@ with st.expander("ℹ️ Instructions, June Schedule & Garmin Setup"):
     Garmin tracks your heart rate to measure effort. 
     * **Moderate (1x):** Brisk walking. 1 min = 1 point.
     * **Vigorous (2x):** Running/Heavy lifting. 1 min = **2 points**.
-    * **Math:** We use **Total Minutes Squared ($min^2$)** to calculate your share of the $600 pot.
+    * **Math:** We use **Total Minutes Squared ($min^2$)** to calculate your share of the $500 pot.
 
     ### 3. Fair Play: Standardizing Your Watch
     To ensure the 2x multiplier is fair for everyone (regardless of resting heart rate), please update your Garmin settings:
@@ -108,7 +108,7 @@ try:
     df = pd.DataFrame(res.data)
 
     if not df.empty:
-        total_pool = 600
+        total_pool = 500
         df['minutes'] = df['minutes'].astype(float)
         
         # Math
