@@ -94,13 +94,6 @@ with st.expander("ℹ️ Instructions, June Schedule & Garmin Setup"):
     * **Moderate (1x):** Brisk walking. 1 min = 1 point.
     * **Vigorous (2x):** Running/Heavy lifting. 1 min = **2 points**.
     * **Math:** We use **Total Minutes Squared ($min^2$)** to calculate your share of the $500 pot.
-
-    ### 3. Fair Play: Standardizing Your Watch
-    To ensure the 2x multiplier is fair for everyone (regardless of resting heart rate), please update your Garmin settings:
-    1. Open **Garmin Connect** app > **Devices** > Your Watch.
-    2. **User Profile** > **Heart Rate & Physio Zones** > **Heart Rate** > **Zones**.
-    3. Change **'Based On'** to **% of HRR** (Heart Rate Reserve).
-    4. Ensure **Zone 3 starts at 50%** (Moderate) and **Zone 4 starts at 70%** (Vigorous).
     """)
 
 try:
